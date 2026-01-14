@@ -1,7 +1,5 @@
 package parsers
 
-import "idtp/values"
-
 func BuildGetRequest(index uint32) []byte {
 	header := byte(0x00)
 	ilen, ci := CompactIndex(index)
@@ -15,7 +13,7 @@ func BuildGetRequest(index uint32) []byte {
 	return t
 }
 
-func BuildUpdateRequest(index uint32, datatype values.DataType, payload []byte) []byte {
+func BuildUpdateRequest(index uint32, datatype byte, payload []byte) []byte {
 	header := byte(0x80)
 	dtype := datatype << 2
 	ilen, ci := CompactIndex(index)
@@ -44,7 +42,7 @@ func BuildExpandedGetRequest(index uint32) []byte {
 	return t
 }
 
-func BuildExpandedUpdateRequest(index uint32, datatype values.DataType, payload []byte) []byte {
+func BuildExpandedUpdateRequest(index uint32, datatype byte, payload []byte) []byte {
 	single := BuildUpdateRequest(index, datatype, payload)
 	single[0] = single[0] & 0x7F
 
@@ -65,7 +63,7 @@ func BuildExpandRequest(dtypes []byte) []byte {
 	return t
 }
 
-func BuildSetTypeRequest(index uint32, newdtype values.DataType) []byte {
+func BuildSetTypeRequest(index uint32, newdtype byte) []byte {
 	ilen, ci := CompactIndex(index)
 
 	t := make([]byte, 3+ilen+1)

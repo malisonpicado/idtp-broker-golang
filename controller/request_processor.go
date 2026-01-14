@@ -4,6 +4,7 @@ import (
 	"idtp/parsers"
 	"idtp/storage"
 	"idtp/values"
+	"net"
 	"strings"
 )
 
@@ -13,11 +14,17 @@ import (
 // function; clean from the first byte of command that enters from a entity input buffer.
 //
 // useExtended bool comes from evaluating: "entity type" is "client"?
-func RequestProcessor(request []byte, useExtended bool, storage *storage.Storage, config values.Configuration,
-	entities *storage.EntitiesList,
-	clients *storage.ClientsList, entityId uint32, omitSender bool) []byte {
-	requests := parsers.ChainParse(request, useExtended)
-	var updated []parsers.Request
+func RequestProcessor(
+	request []byte,
+	useExtended bool,
+	config values.Configuration,
+	currentEntity *net.Conn,
+	entityConfig *values.Entity,
+	storage *storage.Storage,
+	clients *storage.ClientsList,
+	dependents *storage.DependentsManager) []byte {
+
+	requests, _ := parsers.ChainParse(request, useExtended)
 	var responses []byte
 
 	for _, req := range requests {
@@ -27,11 +34,11 @@ func RequestProcessor(request []byte, useExtended bool, storage *storage.Storage
 		}
 
 		if req.Method == values.UPDATE {
-			upt := storage.UpdateAt(req.Index, byte(req.Type), req.Payload, config)
-			responses = append(responses, upt...)
+			response := storage.UpdateAt(req.Index, byte(req.DataType), req.Payload, config.OperationMode == values.OP_MODE_STRICT, useExtended)
+			responses = append(responses, response)
 
-			if upt[0] == byte(values.SUCCESS) {
-				updated = append(updated, req)
+			if response == values.RC_SUCCESS {
+				go Broadcast(req, []byte{0xFF, response}, dependents, clients, currentEntity)
 			}
 
 			continue
@@ -43,55 +50,65 @@ func RequestProcessor(request []byte, useExtended bool, storage *storage.Storage
 		}
 
 		if req.Method == values.SET_TYPE {
-			responses = append(responses, storage.SetTypeAt(req.Index, req.Payload[0]))
+			response := storage.SetTypeAt(req.Index, req.Payload[0])
+			responses = append(responses, response)
+
+			if response == values.RC_SUCCESS {
+				payload := []byte{0xFF}
+				payload = append(payload, parsers.BuildUpdateStream(byte(req.DataType), req.Index, make([]byte, values.SizeOf(byte(req.DataType))))...)
+				go Broadcast(req, payload, dependents, clients, currentEntity)
+			}
+
 			continue
 		}
 
-		responses = append(responses, byte(values.UNKNOWN_METHOD))
+		responses = append(responses, byte(values.RC_UNKNOWN_METHOD))
 	}
 
-	go Broadcast(updated, entityId, omitSender, entities, clients, storage)
 	return responses
 }
 
 // From a array of bytes, parse the array information into a Connection Request.
-// The request is validated, if error is nil, then the information provided
+// The request is validated, if not error, then the information provided
 // is correct.
-func ConnectionRequestProcessor(request []byte, config values.Configuration) (parsers.ConnectionRequest, values.StatusCode) {
+func ConnectionRequestProcessor(request []byte, config values.Configuration) (connReq values.ConnectionRequest, code byte) {
 	connreq, statusCode := parsers.ConnectionRequestParse(request)
 
-	if statusCode != values.SUCCESS {
-		return parsers.ConnectionRequest{}, statusCode
+	if statusCode != values.RC_SUCCESS {
+		return values.ConnectionRequest{}, statusCode
 	}
 
 	if connreq.ProtocolVersion != config.ProtocolVersion {
-		return parsers.ConnectionRequest{}, values.UNSUPPORTED_PROTOCOL_VERSION
+		return values.ConnectionRequest{}, values.RC_UNSUPPORTED_PROTOCOL_VERSION
 	}
 
 	if connreq.EntityType > values.ENTITY_CLIENT {
-		return parsers.ConnectionRequest{}, values.UNKNOWN_ENTITY_TYPE
+		return values.ConnectionRequest{}, values.RC_UNKNOWN_ENTITY_TYPE
 	}
 
 	if connreq.KeepAlive < 60 || connreq.KeepAlive > 3600 {
-		return parsers.ConnectionRequest{}, values.INVALID_KEEP_ALIVE
+		return values.ConnectionRequest{}, values.RC_INVALID_KEEP_ALIVE
+	}
+
+	if config.OperationMode == values.OP_MODE_STRICT && len(connreq.Parameters) == 0 {
+		return values.ConnectionRequest{}, values.RC_DEVICE_MUST_DECLARE_PARAMETERS
 	}
 
 	// If there is not authentication key, then any persistent
 	// connection is allowed
 	if len(config.Key) == 0 || config.OperationMode == values.OP_MODE_FREE {
-		return connreq, values.SUCCESS
+		return connreq, values.RC_SUCCESS
 	}
 
 	// Default and strict mode requires any connection to authenticate
-	if !connreq.HasAuth && config.OperationMode != values.OP_MODE_FREE {
-		return parsers.ConnectionRequest{}, values.CONNECTION_MUST_AUTHENTICATE
+	if !connreq.HasAuth {
+		return values.ConnectionRequest{}, values.RC_CONNECTION_MUST_AUTHENTICATE
 	}
 
-	if connreq.HasAuth {
-		if strings.Compare(connreq.UserKey, config.Key) != 0 {
-			return parsers.ConnectionRequest{}, values.FAILED_AUTHENTICATION
-		}
+	// Mode is default or strict, and conn has auth
+	if strings.Compare(connreq.UserKey, config.Key) != 0 {
+		return values.ConnectionRequest{}, values.RC_FAILED_AUTHENTICATION
 	}
 
-	return connreq, values.SUCCESS
+	return connreq, values.RC_SUCCESS
 }

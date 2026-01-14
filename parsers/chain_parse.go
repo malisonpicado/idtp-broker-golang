@@ -1,18 +1,20 @@
 package parsers
 
-func ChainParse(buffer []byte, useExtendedMode bool) []Request {
-	next := uint32(0)
-	list := []Request{}
+import "idtp/values"
 
-	for next < uint32(len(buffer)) {
-		request, blockLen := SingleParse(buffer[next:], useExtendedMode)
+func ChainParse(buffer []byte, useExtendedMode bool) (req []values.Request, error byte) {
+	next := 0
+	var list []values.Request
+
+	for next < len(buffer) {
+		request, blockLen, e := SingleRequestParse(buffer[next:], useExtendedMode)
 
 		// Invalid method or missing payload
-		if blockLen == 0 {
-			break
+		if e != values.RC_SUCCESS {
+			return list, e
 		}
 
-		next += uint32(blockLen)
+		next += int(blockLen)
 		list = append(list, request)
 
 		// Expand method
@@ -21,5 +23,5 @@ func ChainParse(buffer []byte, useExtendedMode bool) []Request {
 		}
 	}
 
-	return list
+	return list, values.RC_SUCCESS
 }

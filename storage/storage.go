@@ -7,152 +7,151 @@ import (
 	"sync"
 )
 
-type Slot struct {
-	Type       values.DataType
-	Payload    []byte
-	Dependents map[uint32]struct{}
+type Variable struct {
+	DataType byte
+	Payload  []byte
+	Mu       *sync.Mutex
 }
 
 type Storage struct {
-	Length uint32
-	Limit  uint32
-	Data   []Slot
-	Mu     sync.RWMutex
+	Data []Variable
+	Mu   sync.Mutex
 }
 
-// Builds a variable slot. If data dype is not valid, it
-// set the default data type (INT32)
-func SlotBuilder(datatype uint8) (Slot, values.StatusCode) {
-	dataType := values.DataType(datatype)
-	status := values.SUCCESS
+func VariableBuilder(datatype byte) (variable Variable, code byte) {
+	code = values.RC_SUCCESS
 
-	if dataType > values.FLOAT64 {
-		dataType = values.INT32
-		status = values.INVALID_DATA_TYPE_SET_TO_DEFAULT
+	if datatype > values.FLOAT64 {
+		datatype = values.INT32
+		code = values.RC_INVALID_DATA_TYPE_SET_TO_DEFAULT
 	}
 
-	return Slot{
-		Type:       dataType,
-		Payload:    make([]byte, values.SizeOf(dataType)),
-		Dependents: make(map[uint32]struct{}),
-	}, status
+	variable = Variable{
+		DataType: datatype,
+		Payload:  make([]byte, values.SizeOf(datatype)),
+		Mu:       &sync.Mutex{},
+	}
+
+	return
 }
 
-// Initializes and returns an empty storage
-func Initialize(config values.Configuration) *Storage {
+func InitializeStorage(limit uint32) *Storage {
 	return &Storage{
-		Limit:  config.StorageLimit,
-		Length: 0,
-		Data:   make([]Slot, 0, config.StorageLimit),
-		Mu:     sync.RWMutex{},
+		Data: make([]Variable, 0, limit),
 	}
 }
 
-// Adds new variables to the storage. The number of variables added is proportional to
-// the size of the slots parameter. The slots parameter of the function is an array of
-// data types; if the data type is invalid, the resulting slot will have the default
-// data type. The function returns a byte array according to the protocol specification
-// for processing the EXPAND method.
-func (storage *Storage) Expand(slots []byte) []byte {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
-
-	if len(slots) == 0 {
+// Expands the storage up to 'len(variables)'. Each
+// byte is interpreted as the data type of the new
+// variable, if wrong data type it will be set as the
+// default data type.
+//
+// Returns the operation result and the assigned index
+// of the new variable as a bytes for each new variable, as
+// specified in IDTP standard.
+//
+//   - if success: [status code, index 0, index 1, index 2, index 3]
+//   - if error: [status code]
+func (storage *Storage) Expand(variables []byte) []byte {
+	if len(variables) == 0 {
 		return nil
 	}
 
-	currentLength := storage.Length
-	limit := storage.Limit
+	storage.Mu.Lock()
+	defer storage.Mu.Unlock()
 
-	data := make([]Slot, 0, len(slots))
-	result := make([]byte, 0, 5*len(slots))
+	data := make([]Variable, 0, len(variables))
+	result := make([]byte, 0, len(variables)*5)
 
-	for i, item := range slots {
-		index := currentLength + uint32(i)
+	for i, item := range variables {
+		index := len(storage.Data) + i
 
-		if index >= limit {
-			result = append(result, byte(values.EXPANSION_LIMIT_REACHED))
+		if index >= cap(storage.Data) {
+			result = append(result, values.RC_EXPANSION_LIMIT_REACHED)
 			continue
 		}
 
-		slot, statusCode := SlotBuilder(item)
-		result = append(result, byte(statusCode))
-		result = append(result, utils.U32ToBytes(index)...)
+		slot, code := VariableBuilder(item)
+		result = append(result, code)
+		result = append(result, utils.U32ToBytes(uint32(index))...)
 		data = append(data, slot)
 	}
 
-	storage.Length += uint32(len(data))
 	storage.Data = append(storage.Data, data...)
 	return result
 }
 
-// Gets the value of a variable at index I. Returns an
-// UpdateStream format in bytes with its status code at start.
-// If error returns a single byte of operation status code.
+// Gets the data of a variable at index "index".
+//
+// Returns the status code and the data in update stream format
+// as specified in IDTP standard.
 func (storage *Storage) GetAt(index uint32) []byte {
-	storage.Mu.RLock()
-	defer storage.Mu.RUnlock()
-
-	if index >= storage.Length {
-		return []byte{byte(values.INVALID_INDEX)}
+	if index >= uint32(len(storage.Data)) {
+		return []byte{values.RC_INVALID_INDEX}
 	}
 
-	slot := storage.Data[index]
-	upst := parsers.BuildUpdateStream(byte(slot.Type), index, slot.Payload)
+	variable := &storage.Data[index]
+	variable.Mu.Lock()
+	defer variable.Mu.Unlock()
 
-	result := make([]byte, 0, 1+len(upst))
-	result = append(result, byte(values.SUCCESS))
-	result = append(result, upst...)
+	data := make([]byte, 0)
+	updateStream := parsers.BuildUpdateStream(variable.DataType, index, variable.Payload)
+	data = append(data, values.RC_SUCCESS)
+	data = append(data, updateStream...)
 
-	return result
+	return data
 }
 
-// Updates the value of a variable at index I. Returns a single byte slice
-// that reprent the update operation status code.
-func (storage *Storage) UpdateAt(index uint32, datatype byte, payload []byte, config values.Configuration) []byte {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
-
-	if index >= storage.Length {
-		return []byte{byte(values.INVALID_INDEX)}
+// Updates value and data type of a variable at index "index".
+// It updates the data type if is not in strict mode or if entity is client.
+//
+// Returns the status code of the operation, as specified in IDTP standard.
+func (storage *Storage) UpdateAt(index uint32, datatype byte, payload []byte, isStrictMode bool, isClient bool) byte {
+	if index >= uint32(len(storage.Data)) {
+		return values.RC_INVALID_INDEX
 	}
 
-	if values.SizeOf(values.DataType(datatype)) == 0 {
-		return []byte{byte(values.UNKNOWN_DATA_TYPE)}
+	if datatype > values.FLOAT64 {
+		return values.RC_UNKNOWN_DATA_TYPE
 	}
 
-	t := storage.Data[index]
+	variable := &storage.Data[index]
+	variable.Mu.Lock()
+	defer variable.Mu.Unlock()
 
-	if config.OperationMode != values.OP_MODE_STRICT {
-		t.Type = values.DataType(datatype)
-	} else if values.DataType(datatype) != t.Type {
-		return []byte{byte(values.DATA_TYPE_OVERWRITE_NOT_ALLOWED)}
+	isDifferentDataType := variable.DataType != datatype
+
+	if isDifferentDataType && (isStrictMode && !isClient) {
+		return values.RC_DATA_TYPE_OVERWRITE_NOT_ALLOWED
 	}
 
-	t.Payload = payload
-	storage.Data[index] = t
+	if isDifferentDataType {
+		variable.DataType = datatype
+	}
 
-	return []byte{byte(values.SUCCESS)}
+	variable.Payload = payload
+	return values.RC_SUCCESS
 }
 
-// NOTA: Se entiende que este método es usado cuando el tipo de entidad
-// es "cliente" y ha sido previamente validada
+// Sets a new data type of a variable at index "index" and updates its value
+// to all zero bits, with a size according to the new data type.
+//
+// Returns the status code of the operation, as specified in IDTP standard.
 func (storage *Storage) SetTypeAt(index uint32, newType byte) byte {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
-
-	if index >= storage.Length {
-		return byte(values.INVALID_INDEX)
+	if index >= uint32(len(storage.Data)) {
+		return values.RC_INVALID_INDEX
 	}
 
-	slot, statusCode := SlotBuilder(newType)
+	if newType > values.FLOAT64 {
+		return values.RC_UNKNOWN_DATA_TYPE
+	}
 
-	t := storage.Data[index]
+	variable := &storage.Data[index]
+	variable.Mu.Lock()
+	defer variable.Mu.Unlock()
 
-	t.Type = slot.Type
-	t.Payload = slot.Payload
+	variable.DataType = newType
+	variable.Payload = make([]byte, values.SizeOf(newType))
 
-	storage.Data[index] = t
-
-	return byte(statusCode)
+	return values.RC_SUCCESS
 }

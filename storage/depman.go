@@ -1,54 +1,75 @@
-// Variable Dependant Manager
+// Variable Dependent Manager
 package storage
 
-import "errors"
+import (
+	"net"
+	"sync"
+)
 
-func (storage *Storage) AddDependents(indexes []uint32, entityId uint32) uint32 {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
+type dependents = map[*net.Conn]struct{}
 
-	errors := uint32(0)
-	for _, index := range indexes {
-		if index >= storage.Length {
-			errors++
-			continue
-		}
-
-		storage.Data[index].Dependents[entityId] = struct{}{}
-	}
-
-	return errors
+type DependentsManager struct {
+	Variables map[uint32]dependents // uint32 = index of a variable; dependents = conns that depends of this variable
+	Mu        sync.Mutex
 }
 
-func (storage *Storage) RemoveDependents(indexes []uint32, entityId uint32) uint32 {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
-
-	errors := uint32(0)
-
-	for _, index := range indexes {
-		if index >= storage.Length {
-			errors++
-			continue
-		}
-		delete(storage.Data[index].Dependents, entityId)
+func InitializeDependencyManager() *DependentsManager {
+	return &DependentsManager{
+		Variables: make(map[uint32]dependents),
 	}
-
-	return errors
 }
 
-func (storage *Storage) GetDependentsAt(index uint32) ([]uint32, error) {
-	storage.Mu.Lock()
-	defer storage.Mu.Unlock()
+func (depman *DependentsManager) AddDependentTo(variableIndex uint32, deviceConn *net.Conn) {
+	depman.Mu.Lock()
+	defer depman.Mu.Unlock()
 
-	if index >= storage.Length {
-		return nil, errors.New("invalid index")
+	_, exists := depman.Variables[variableIndex]
+
+	if !exists {
+		deps := make(dependents)
+		deps[deviceConn] = struct{}{}
+		depman.Variables[variableIndex] = deps
+		return
 	}
 
-	keys := make([]uint32, 0, len(storage.Data[index].Dependents))
-	for k := range storage.Data[index].Dependents {
-		keys = append(keys, k)
+	var dependents dependents = depman.Variables[variableIndex]
+	dependents[deviceConn] = struct{}{}
+	depman.Variables[variableIndex] = dependents
+}
+
+func (depman *DependentsManager) RemoveDependentFrom(variableIndex uint32, deviceConn *net.Conn) {
+	depman.Mu.Lock()
+	defer depman.Mu.Unlock()
+
+	_, exists := depman.Variables[variableIndex]
+
+	if !exists {
+		return
 	}
 
-	return keys, nil
+	delete(depman.Variables[variableIndex], deviceConn)
+
+	if len(depman.Variables[variableIndex]) == 0 {
+		delete(depman.Variables, variableIndex)
+	}
+}
+
+func (depman *DependentsManager) GetDependentsOf(variableIndex uint32) []*net.Conn {
+	depman.Mu.Lock()
+	defer depman.Mu.Unlock()
+
+	_, exists := depman.Variables[variableIndex]
+
+	if !exists {
+		return nil
+	}
+
+	var depset dependents = depman.Variables[variableIndex]
+	dependents := make([]*net.Conn, 0, len(depset))
+
+	for item := range depset {
+		dependents = append(dependents, item)
+	}
+
+	return dependents
 }

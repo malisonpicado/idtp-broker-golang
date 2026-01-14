@@ -1,84 +1,61 @@
 package values
 
-type StatusCode uint8
-
+// RESPONSE CODES
 const (
-	SUCCESS                          StatusCode = 0x00
-	INVALID_INDEX                    StatusCode = 0x01
-	DATA_TYPE_OVERWRITE_NOT_ALLOWED  StatusCode = 0x02
-	MISSING_PAYLOAD                  StatusCode = 0x03
-	UNKNOWN_METHOD                   StatusCode = 0x04
-	UNSUPPORTED_PROTOCOL_VERSION     StatusCode = 0x05
-	INVALID_PROTOCOL_VERSION         StatusCode = 0x06
-	UNKNOWN_ENTITY_TYPE              StatusCode = 0x07
-	INVALID_KEEP_ALIVE               StatusCode = 0x08
-	CONNECTION_MUST_AUTHENTICATE     StatusCode = 0x09
-	FAILED_AUTHENTICATION            StatusCode = 0x0A
-	DEVICE_MUST_DECLARE_PARAMETERS   StatusCode = 0x0B
-	ONTE_TIME_CONNECTION_NOT_ALLOWED StatusCode = 0x0C
-	UNKNOWN_DATA_TYPE                StatusCode = 0x0D
-	INVALID_DATA_TYPE_SET_TO_DEFAULT StatusCode = 0x0E
-	EXPANSION_LIMIT_REACHED          StatusCode = 0x1E
+	RC_SUCCESS                                byte = 0x00
+	RC_INVALID_INDEX                          byte = 0x01
+	RC_DATA_TYPE_OVERWRITE_NOT_ALLOWED        byte = 0x02
+	RC_MISSING_PAYLOAD                        byte = 0x03
+	RC_UNKNOWN_METHOD                         byte = 0x04
+	RC_UNSUPPORTED_PROTOCOL_VERSION           byte = 0x05
+	RC_INVALID_PROTOCOL_VERSION               byte = 0x06
+	RC_UNKNOWN_ENTITY_TYPE                    byte = 0x07
+	RC_INVALID_KEEP_ALIVE                     byte = 0x08
+	RC_CONNECTION_MUST_AUTHENTICATE           byte = 0x09
+	RC_FAILED_AUTHENTICATION                  byte = 0x0A
+	RC_DEVICE_MUST_DECLARE_PARAMETERS         byte = 0x0B
+	RC_ONE_TIME_CONNECTION_NOT_ALLOWED        byte = 0x0C
+	RC_UNKNOWN_DATA_TYPE                      byte = 0x0D
+	RC_INVALID_DATA_TYPE_SET_TO_DEFAULT       byte = 0x0E
+	RC_VARIABLE_OPERATION_NOT_ALLOWED         byte = 0x0F
+	RC_INVALID_PARAMETER                      byte = 0x10
+	RC_UNKNOWN_CONNECTION_CODE                byte = 0x11
+	RC_SUCCESSFUL_CONN_WITH_PREDEFINED_PARAMS byte = 0x12
+	RC_EXPANSION_LIMIT_REACHED                byte = 0x1E
 )
 
-type DataType uint8
-
+// DATA TYPES
 const (
-	BOOLEAN DataType = 0x00
-	UINT8   DataType = 0x01
-	UINT16  DataType = 0x02
-	UINT32  DataType = 0x03
-	UINT64  DataType = 0x04
-	INT8    DataType = 0x05
-	INT16   DataType = 0x06
-	INT32   DataType = 0x07 // DEFAULT
-	INT64   DataType = 0x08
-	FLOAT32 DataType = 0x09
-	FLOAT64 DataType = 0x0A
+	BOOLEAN byte = 0x00
+	UINT8   byte = 0x01
+	UINT16  byte = 0x02
+	UINT32  byte = 0x03
+	UINT64  byte = 0x04
+	INT8    byte = 0x05
+	INT16   byte = 0x06
+	INT32   byte = 0x07 // DEFAULT
+	INT64   byte = 0x08
+	FLOAT32 byte = 0x09
+	FLOAT64 byte = 0x0A
 )
 
-type MethodCode uint8
-
+// METHODS
 const (
-	GET      MethodCode = 0x00
-	UPDATE   MethodCode = 0x01
-	EXPAND   MethodCode = 0x02
-	SET_TYPE MethodCode = 0x03
+	GET      byte = 0x00
+	UPDATE   byte = 0x01
+	EXPAND   byte = 0x02
+	SET_TYPE byte = 0x03
 )
 
-type OperationMode uint8
-
+// OPERATION MODES
 const (
-	OP_MODE_STRICT  OperationMode = 0
-	OP_MODE_DEFAULT OperationMode = 1
-	OP_MODE_FREE    OperationMode = 2
+	OP_MODE_STRICT  byte = 0
+	OP_MODE_DEFAULT byte = 1
+	OP_MODE_FREE    byte = 2
 )
 
-type EntityType uint8
-
+// ENTITY TYPES
 const (
-	ENTITY_DEVICE EntityType = 0
-	ENTITY_CLIENT EntityType = 1
+	ENTITY_DEVICE byte = 0
+	ENTITY_CLIENT byte = 1
 )
-
-type Configuration struct {
-	Key             string
-	ProtocolVersion uint8
-	OperationMode   OperationMode
-	StorageLimit    uint32
-}
-
-func SizeOf(t DataType) uint8 {
-	switch t {
-	case BOOLEAN, UINT8, INT8:
-		return 1
-	case UINT16, INT16:
-		return 2
-	case UINT32, INT32, FLOAT32:
-		return 4
-	case UINT64, INT64, FLOAT64:
-		return 8
-	}
-
-	return 0
-}

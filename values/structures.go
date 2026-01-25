@@ -30,6 +30,7 @@ type Configuration struct {
 
 type Entity struct {
 	EntityType       byte
+	ProcessAsStrict  bool
 	UpdateParams     []uint32
 	DependencyParams []uint32
 }

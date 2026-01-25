@@ -5,7 +5,31 @@ import (
 	"idtp/values"
 )
 
-func SingleRequestParse(input []byte, useExtendedMode bool) (req values.Request, bytesEvaluated byte, error byte) {
+func ParseRequest(buffer []byte, useExtendedMode bool) (req []values.Request, code byte) {
+	next := 0
+	var list []values.Request
+
+	for next < len(buffer) {
+		request, blockLen, e := parseSingleRequest(buffer[next:], useExtendedMode)
+
+		// Invalid method or missing payload
+		if e != values.RC_SUCCESS {
+			return list, e
+		}
+
+		next += int(blockLen)
+		list = append(list, request)
+
+		// EXPAND method
+		if blockLen == 0xFF {
+			break
+		}
+	}
+
+	return list, values.RC_SUCCESS
+}
+
+func parseSingleRequest(input []byte, useExtendedMode bool) (req values.Request, bytesEvaluated byte, error byte) {
 	if len(input) == 0 {
 		return values.Request{}, 0, values.RC_MISSING_PAYLOAD
 	}
@@ -63,7 +87,7 @@ func parseGet(input []byte) (req values.Request, bytesEvaluated byte, error byte
 func parseUpdate(input []byte) (req values.Request, bytesEvaluated byte, error byte) {
 	indexLength := extractIndexLength(input[0])
 	dataType := extractDataType(input[0])
-	dataTypeSize := values.SizeOf(dataType)
+	dataTypeSize := utils.SizeOf(dataType)
 	blockSize := 1 + indexLength + dataTypeSize
 
 	if len(input) < int(blockSize) {

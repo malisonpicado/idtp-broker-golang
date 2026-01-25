@@ -18,7 +18,7 @@ type Storage struct {
 	Mu   sync.Mutex
 }
 
-func VariableBuilder(datatype byte) (variable Variable, code byte) {
+func buildVariable(datatype byte) (variable Variable, code byte) {
 	code = values.RC_SUCCESS
 
 	if datatype > values.FLOAT64 {
@@ -28,7 +28,7 @@ func VariableBuilder(datatype byte) (variable Variable, code byte) {
 
 	variable = Variable{
 		DataType: datatype,
-		Payload:  make([]byte, values.SizeOf(datatype)),
+		Payload:  make([]byte, utils.SizeOf(datatype)),
 		Mu:       &sync.Mutex{},
 	}
 
@@ -39,6 +39,10 @@ func InitializeStorage(limit uint32) *Storage {
 	return &Storage{
 		Data: make([]Variable, 0, limit),
 	}
+}
+
+func (storage *Storage) IndexExists(index uint32) bool {
+	return index < uint32(cap(storage.Data))
 }
 
 // Expands the storage up to 'len(variables)'. Each
@@ -61,7 +65,7 @@ func (storage *Storage) Expand(variables []byte) []byte {
 	defer storage.Mu.Unlock()
 
 	data := make([]Variable, 0, len(variables))
-	result := make([]byte, 0, len(variables)*5)
+	result := make([]byte, 0)
 
 	for i, item := range variables {
 		index := len(storage.Data) + i
@@ -71,7 +75,7 @@ func (storage *Storage) Expand(variables []byte) []byte {
 			continue
 		}
 
-		slot, code := VariableBuilder(item)
+		slot, code := buildVariable(item)
 		result = append(result, code)
 		result = append(result, utils.U32ToBytes(uint32(index))...)
 		data = append(data, slot)
@@ -106,7 +110,7 @@ func (storage *Storage) GetAt(index uint32) []byte {
 // It updates the data type if is not in strict mode or if entity is client.
 //
 // Returns the status code of the operation, as specified in IDTP standard.
-func (storage *Storage) UpdateAt(index uint32, datatype byte, payload []byte, isStrictMode bool, isClient bool) byte {
+func (storage *Storage) UpdateAt(index uint32, datatype byte, payload []byte, allowTypeOverwrite bool) byte {
 	if index >= uint32(len(storage.Data)) {
 		return values.RC_INVALID_INDEX
 	}
@@ -119,13 +123,11 @@ func (storage *Storage) UpdateAt(index uint32, datatype byte, payload []byte, is
 	variable.Mu.Lock()
 	defer variable.Mu.Unlock()
 
-	isDifferentDataType := variable.DataType != datatype
+	if variable.DataType != datatype {
+		if !allowTypeOverwrite {
+			return values.RC_DATA_TYPE_OVERWRITE_NOT_ALLOWED
+		}
 
-	if isDifferentDataType && (isStrictMode && !isClient) {
-		return values.RC_DATA_TYPE_OVERWRITE_NOT_ALLOWED
-	}
-
-	if isDifferentDataType {
 		variable.DataType = datatype
 	}
 
@@ -151,7 +153,7 @@ func (storage *Storage) SetTypeAt(index uint32, newType byte) byte {
 	defer variable.Mu.Unlock()
 
 	variable.DataType = newType
-	variable.Payload = make([]byte, values.SizeOf(newType))
+	variable.Payload = make([]byte, utils.SizeOf(newType))
 
 	return values.RC_SUCCESS
 }

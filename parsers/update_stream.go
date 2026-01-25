@@ -54,7 +54,7 @@ func BuildUpdateStream(dataType byte, index uint32, payload []byte) []byte {
 func ParseUpdateStream(data []byte) (upstr UpdateStream, bytesEvaluated byte, error byte) {
 	indexLength := extractIndexLength(data[0])
 	dataType := extractDataType(data[0])
-	dataTypeSize := values.SizeOf(dataType)
+	dataTypeSize := utils.SizeOf(dataType)
 	blockSize := 1 + indexLength + dataTypeSize
 
 	if len(data) < int(blockSize) {

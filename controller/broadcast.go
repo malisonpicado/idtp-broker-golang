@@ -2,14 +2,13 @@ package controller
 
 import (
 	"idtp/storage"
-	"idtp/values"
 	"net"
 )
 
 func Broadcast(
-	request values.Request,
+	varIndex uint32,
 	response []byte,
-	dependents *storage.DependentsManager,
+	depman *storage.DependentsManager,
 	clients *storage.ClientsList,
 	currentEntity *net.Conn) {
 
@@ -23,7 +22,7 @@ func Broadcast(
 		(*client).Write(response)
 	}
 
-	deps := dependents.GetDependentsOf(request.Index)
+	deps := depman.GetDependentsOf(varIndex)
 
 	for _, dependent := range deps {
 		if *dependent == *currentEntity {

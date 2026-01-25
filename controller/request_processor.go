@@ -3,6 +3,7 @@ package controller
 import (
 	"idtp/parsers"
 	"idtp/storage"
+	"idtp/utils"
 	"idtp/values"
 	"net"
 	"strings"
@@ -12,11 +13,8 @@ import (
 // the request and executes the request. Returns a response in the same order of request
 // encoded in bytes. The request param, must be cleaned before the use of this
 // function; clean from the first byte of command that enters from a entity input buffer.
-//
-// useExtended bool comes from evaluating: "entity type" is "client"?
 func RequestProcessor(
 	request []byte,
-	useExtended bool,
 	config values.Configuration,
 	currentEntity *net.Conn,
 	entityConfig *values.Entity,
@@ -24,21 +22,35 @@ func RequestProcessor(
 	clients *storage.ClientsList,
 	dependents *storage.DependentsManager) []byte {
 
-	requests, _ := parsers.ChainParse(request, useExtended)
+	var freeAllow bool = !(entityConfig != nil && entityConfig.ProcessAsStrict)
+	var useExtended bool = entityConfig != nil && entityConfig.EntityType == values.ENTITY_CLIENT
+
+	requests, _ := parsers.ParseRequest(request, useExtended)
 	var responses []byte
 
 	for _, req := range requests {
 		if req.Method == values.GET {
+			if !freeAllow && !utils.HasIndex(req.Index, entityConfig.DependencyParams) {
+				responses = append(responses, values.RC_VARIABLE_OPERATION_NOT_ALLOWED)
+				continue
+			}
+
 			responses = append(responses, storage.GetAt(req.Index)...)
 			continue
 		}
 
 		if req.Method == values.UPDATE {
-			response := storage.UpdateAt(req.Index, byte(req.DataType), req.Payload, config.OperationMode == values.OP_MODE_STRICT, useExtended)
+			if !freeAllow && !utils.HasIndex(req.Index, entityConfig.DependencyParams) {
+				responses = append(responses, values.RC_VARIABLE_OPERATION_NOT_ALLOWED)
+				continue
+			}
+
+			response := storage.UpdateAt(req.Index, byte(req.DataType), req.Payload, freeAllow)
 			responses = append(responses, response)
 
 			if response == values.RC_SUCCESS {
-				go Broadcast(req, []byte{0xFF, response}, dependents, clients, currentEntity)
+				payload := append([]byte{0xFF}, parsers.BuildUpdateStream(req.DataType, req.Index, req.Payload)...)
+				go Broadcast(req.Index, payload, dependents, clients, currentEntity)
 			}
 
 			continue
@@ -54,9 +66,8 @@ func RequestProcessor(
 			responses = append(responses, response)
 
 			if response == values.RC_SUCCESS {
-				payload := []byte{0xFF}
-				payload = append(payload, parsers.BuildUpdateStream(byte(req.DataType), req.Index, make([]byte, values.SizeOf(byte(req.DataType))))...)
-				go Broadcast(req, payload, dependents, clients, currentEntity)
+				payload := append([]byte{0xFF}, parsers.BuildUpdateStream(req.DataType, req.Index, make([]byte, utils.SizeOf(byte(req.DataType))))...)
+				go Broadcast(req.Index, payload, dependents, clients, currentEntity)
 			}
 
 			continue
@@ -71,7 +82,7 @@ func RequestProcessor(
 // From a array of bytes, parse the array information into a Connection Request.
 // The request is validated, if not error, then the information provided
 // is correct.
-func ConnectionRequestProcessor(request []byte, config values.Configuration) (connReq values.ConnectionRequest, code byte) {
+func ConnectionRequestProcessor(request []byte, config values.Configuration, stg *storage.Storage) (connReq values.ConnectionRequest, code byte) {
 	connreq, statusCode := parsers.ConnectionRequestParse(request)
 
 	if statusCode != values.RC_SUCCESS {
@@ -108,6 +119,13 @@ func ConnectionRequestProcessor(request []byte, config values.Configuration) (co
 	// Mode is default or strict, and conn has auth
 	if strings.Compare(connreq.UserKey, config.Key) != 0 {
 		return values.ConnectionRequest{}, values.RC_FAILED_AUTHENTICATION
+	}
+
+	// Verify parameter is valid
+	for _, param := range connreq.Parameters {
+		if !stg.IndexExists(param.Index) {
+			return values.ConnectionRequest{}, values.RC_INVALID_PARAMETER
+		}
 	}
 
 	return connreq, values.RC_SUCCESS

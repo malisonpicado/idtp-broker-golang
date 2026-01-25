@@ -59,3 +59,11 @@ const (
 	ENTITY_DEVICE byte = 0
 	ENTITY_CLIENT byte = 1
 )
+
+// CONNECTIONS CODES
+const (
+	CC_ONE_TIME_CONN   byte = 0xFF
+	CC_PERSISTENT_CONN byte = 0x00
+	CC_PING            byte = 0x01
+	CC_DISCONNECTION   byte = 0x02
+)

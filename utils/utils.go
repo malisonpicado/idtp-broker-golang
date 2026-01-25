@@ -1,5 +1,36 @@
 package utils
 
+// Returns the size in bytes of a data type
+// payload. If the returned size is 0, the
+// the data type is invalid.
+func SizeOf(dataType byte) byte {
+	switch dataType {
+	// case of: boolean, uint8, int8
+	case 0x00, 0x01, 0x05:
+		return 1
+	// case of: uint16, int16
+	case 0x02, 0x06:
+		return 2
+	// case of: uint32, int32, float32
+	case 0x03, 0x07, 0x09:
+		return 4
+	// case of: uint64, int64, float64
+	case 0x04, 0x08, 0x0A:
+		return 8
+	}
+
+	return 0
+}
+
+func HasIndex(i uint32, list []uint32) bool {
+	for _, ix := range list {
+		if ix == i {
+			return true
+		}
+	}
+	return false
+}
+
 // BytesToU16 converts a byte slice into an unsigned 16-bit integer (uint16).
 // It takes a byte slice of any length and interprets the first two bytes as a uint16 value.
 // If the input slice is shorter than 2 bytes, it pads the remaining bytes with zeros to form a complete uint16.

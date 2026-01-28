@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-type dependents = map[*net.Conn]struct{}
+type dependents = map[net.Conn]struct{}
 
 type DependentsManager struct {
 	Variables map[uint32]dependents // uint32 = index of a variable; dependents = conns that depends of this variable
@@ -19,7 +19,7 @@ func InitializeDependencyManager() *DependentsManager {
 	}
 }
 
-func (depman *DependentsManager) AddDependentTo(variableIndex uint32, deviceConn *net.Conn) {
+func (depman *DependentsManager) AddDependentTo(variableIndex uint32, deviceConn net.Conn) {
 	depman.Mu.Lock()
 	defer depman.Mu.Unlock()
 
@@ -37,7 +37,7 @@ func (depman *DependentsManager) AddDependentTo(variableIndex uint32, deviceConn
 	depman.Variables[variableIndex] = dependents
 }
 
-func (depman *DependentsManager) RemoveDependentFrom(variableIndex uint32, deviceConn *net.Conn) {
+func (depman *DependentsManager) RemoveDependentFrom(variableIndex uint32, deviceConn net.Conn) {
 	depman.Mu.Lock()
 	defer depman.Mu.Unlock()
 
@@ -54,7 +54,7 @@ func (depman *DependentsManager) RemoveDependentFrom(variableIndex uint32, devic
 	}
 }
 
-func (depman *DependentsManager) GetDependentsOf(variableIndex uint32) []*net.Conn {
+func (depman *DependentsManager) GetDependentsOf(variableIndex uint32) []net.Conn {
 	depman.Mu.Lock()
 	defer depman.Mu.Unlock()
 
@@ -65,7 +65,7 @@ func (depman *DependentsManager) GetDependentsOf(variableIndex uint32) []*net.Co
 	}
 
 	var depset dependents = depman.Variables[variableIndex]
-	dependents := make([]*net.Conn, 0, len(depset))
+	dependents := make([]net.Conn, 0, len(depset))
 
 	for item := range depset {
 		dependents = append(dependents, item)

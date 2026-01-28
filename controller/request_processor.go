@@ -16,7 +16,7 @@ import (
 func RequestProcessor(
 	request []byte,
 	config values.Configuration,
-	currentEntity *net.Conn,
+	currentEntity net.Conn,
 	entityConfig *values.Entity,
 	storage *storage.Storage,
 	clients *storage.ClientsList,

@@ -10,25 +10,25 @@ func Broadcast(
 	response []byte,
 	depman *storage.DependentsManager,
 	clients *storage.ClientsList,
-	currentEntity *net.Conn) {
+	currentEntity net.Conn) {
 
 	cls := clients.GetClients()
 
 	for _, client := range cls {
-		if *client == *currentEntity {
+		if client == currentEntity {
 			continue
 		}
 
-		(*client).Write(response)
+		client.Write(response)
 	}
 
 	deps := depman.GetDependentsOf(varIndex)
 
 	for _, dependent := range deps {
-		if *dependent == *currentEntity {
+		if dependent == currentEntity {
 			continue
 		}
 
-		(*dependent).Write(response)
+		dependent.Write(response)
 	}
 }

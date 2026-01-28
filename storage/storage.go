@@ -42,7 +42,7 @@ func InitializeStorage(limit uint32) *Storage {
 }
 
 func (storage *Storage) IndexExists(index uint32) bool {
-	return index < uint32(cap(storage.Data))
+	return index < uint32(len(storage.Data))
 }
 
 // Expands the storage up to 'len(variables)'. Each

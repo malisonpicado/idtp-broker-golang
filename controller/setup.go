@@ -18,7 +18,7 @@ func ClearDependencies(conn net.Conn, entity *values.Entity, depman *storage.Dep
 	}
 }
 
-func CreateEntityConfig(connreq values.ConnectionRequest, setStrict bool) *values.Entity {
+func CreateEntityConfig(connreq *values.ConnectionRequest, setStrict bool) *values.Entity {
 	entity := &values.Entity{
 		EntityType: connreq.EntityType,
 	}

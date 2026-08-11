@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"idtp/builders"
 	"idtp/parsers"
 	"idtp/storage"
 	"idtp/utils"
@@ -49,7 +50,7 @@ func RequestProcessor(
 			responses = append(responses, response)
 
 			if response == values.RC_SUCCESS {
-				payload := append([]byte{0xFF}, parsers.BuildUpdateStream(req.DataType, req.Index, req.Payload)...)
+				payload := append([]byte{0xFF}, builders.BuildUpdateStream(req.DataType, req.Index, req.Payload)...)
 				go Broadcast(req.Index, payload, dependents, clients, currentEntity)
 			}
 
@@ -66,7 +67,7 @@ func RequestProcessor(
 			responses = append(responses, response)
 
 			if response == values.RC_SUCCESS {
-				payload := append([]byte{0xFF}, parsers.BuildUpdateStream(req.DataType, req.Index, make([]byte, utils.SizeOf(byte(req.DataType))))...)
+				payload := append([]byte{0xFF}, builders.BuildUpdateStream(req.DataType, req.Index, make([]byte, utils.SizeOf(byte(req.DataType))))...)
 				go Broadcast(req.Index, payload, dependents, clients, currentEntity)
 			}
 

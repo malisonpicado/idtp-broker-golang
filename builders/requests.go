@@ -1,8 +1,10 @@
-package parsers
+package builders
+
+import "idtp/utils"
 
 func BuildGetRequest(index uint32) []byte {
 	header := byte(0x00)
-	ilen, ci := CompactIndex(index)
+	ilen, ci := utils.CompactIndex(index)
 
 	header |= ilen
 	t := make([]byte, 2+ilen)
@@ -16,7 +18,7 @@ func BuildGetRequest(index uint32) []byte {
 func BuildUpdateRequest(index uint32, datatype byte, payload []byte) []byte {
 	header := byte(0x80)
 	dtype := datatype << 2
-	ilen, ci := CompactIndex(index)
+	ilen, ci := utils.CompactIndex(index)
 
 	header |= byte(dtype)
 	header |= ilen
@@ -64,7 +66,7 @@ func BuildExpandRequest(dtypes []byte) []byte {
 }
 
 func BuildSetTypeRequest(index uint32, newdtype byte) []byte {
-	ilen, ci := CompactIndex(index)
+	ilen, ci := utils.CompactIndex(index)
 
 	t := make([]byte, 3+ilen+1)
 

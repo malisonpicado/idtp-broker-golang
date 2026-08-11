@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"idtp/parsers"
+	"idtp/builders"
 	"idtp/utils"
 	"idtp/values"
 	"sync"
@@ -99,7 +99,7 @@ func (storage *Storage) GetAt(index uint32) []byte {
 	defer variable.Mu.Unlock()
 
 	data := make([]byte, 0)
-	updateStream := parsers.BuildUpdateStream(variable.DataType, index, variable.Payload)
+	updateStream := builders.BuildUpdateStream(variable.DataType, index, variable.Payload)
 	data = append(data, values.RC_SUCCESS)
 	data = append(data, updateStream...)
 

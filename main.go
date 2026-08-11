@@ -19,8 +19,6 @@ var configuration = values.Configuration{
 	StorageLimit:    1_000_000,
 }
 
-var IdCounter uint32
-
 var database = storage.InitializeStorage(configuration.StorageLimit)
 var dependents = storage.InitializeDependencyManager()
 var clients = storage.InitializeClientsList()
@@ -93,6 +91,7 @@ func handleTcpConnection(conn net.Conn) {
 			}
 
 			conn.Write(controller.RequestProcessor(data, configuration, conn, entity, database, clients, dependents))
+			continue
 		}
 
 		if processDataAs.Type == values.PT_ERROR {
@@ -102,6 +101,7 @@ func handleTcpConnection(conn net.Conn) {
 
 		if processDataAs.Type == values.PT_PING {
 			conn.Write([]byte{values.RC_SUCCESS})
+			continue
 		}
 
 		if processDataAs.Type == values.PT_CREATE_CONNECTION {
@@ -112,7 +112,7 @@ func handleTcpConnection(conn net.Conn) {
 				return
 			}
 
-			entity = controller.CreateEntityConfig(connreq, configuration.OperationMode == values.OP_MODE_STRICT || crcode == values.RC_SUCCESSFUL_CONN_WITH_PREDEFINED_PARAMS)
+			entity = controller.CreateEntityConfig(&connreq, configuration.OperationMode == values.OP_MODE_STRICT || crcode == values.RC_SUCCESSFUL_CONN_WITH_PREDEFINED_PARAMS)
 			idleTimeout = time.Duration(connreq.KeepAlive) * time.Second
 
 			if entity.EntityType == values.ENTITY_DEVICE {
@@ -122,6 +122,7 @@ func handleTcpConnection(conn net.Conn) {
 			}
 
 			conn.Write([]byte{values.RC_SUCCESS})
+			continue
 		}
 
 		if processDataAs.Type == values.PT_DISCONNECTION {

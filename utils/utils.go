@@ -22,6 +22,8 @@ func SizeOf(dataType byte) byte {
 	return 0
 }
 
+// Search for index "i" in "list". Returns true
+// if index "i" is in "list", returns false otherwise.
 func HasIndex(i uint32, list []uint32) bool {
 	for _, ix := range list {
 		if ix == i {
@@ -31,11 +33,32 @@ func HasIndex(i uint32, list []uint32) bool {
 	return false
 }
 
+// Converts an index to byte format. Returns the index length
+// code and the index in bytes based on the length code value.
+// 0x00 -> 1 byte, ..., 0x03 -> 4 bytes
+func CompactIndex(index uint32) (ilen byte, ibyte []byte) {
+	i := U32ToBytes(index)
+
+	if index < 256 {
+		return 0x00, i[3:4]
+	}
+
+	if index < 65_536 {
+		return 0x01, i[2:4]
+	}
+
+	if index < 16_777_216 {
+		return 0x02, i[1:4]
+	}
+
+	return 0x03, i
+}
+
 // BytesToU16 converts a byte slice into an unsigned 16-bit integer (uint16).
 // It takes a byte slice of any length and interprets the first two bytes as a uint16 value.
 // If the input slice is shorter than 2 bytes, it pads the remaining bytes with zeros to form a complete uint16.
 // The conversion uses little-endian format (least significant byte first).
-func BytesToU16(arr []uint8) uint16 {
+func BytesToU16(arr []byte) uint16 {
 	var v uint16 = 0
 
 	for i := range len(arr) {
@@ -54,7 +77,7 @@ func BytesToU16(arr []uint8) uint16 {
 // It takes a byte slice of any length and interprets the first four bytes as a uint32 value.
 // If the input slice is shorter than 4 bytes, it pads the remaining bytes with zeros to form a complete uint32.
 // The conversion uses little-endian format (least significant byte first).
-func BytesToU32(arr []uint8) uint32 {
+func BytesToU32(arr []byte) uint32 {
 	var v uint32 = 0
 
 	for i := range len(arr) {
@@ -73,7 +96,7 @@ func BytesToU32(arr []uint8) uint32 {
 // It takes a byte slice of any length and interprets the first eight bytes as a uint64 value.
 // If the input slice is shorter than 8 bytes, it pads the remaining bytes with zeros to form a complete uint64.
 // The conversion uses little-endian format (least significant byte first).
-func BytesToU64(arr []uint8) uint64 {
+func BytesToU64(arr []byte) uint64 {
 	var v uint64 = 0
 
 	for i := range len(arr) {
